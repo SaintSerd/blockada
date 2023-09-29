@@ -146,7 +146,9 @@ def camera_config(camera, target_rect):
     t = min(0, t)  # Не виходимо за верхню межу
 
     return Rect(l, t, w, h)
-    
+
+camera = Camera(camera_config, level1_width, level1_height)
+
 class Settings(sprite.Sprite):
     def __init__(self, x, y, w, h, speed, img):
         super().__init__()
@@ -161,35 +163,131 @@ class Settings(sprite.Sprite):
 
     def reset(self): 
         window.blit(self.image, (self.rect.x, self.rect.y))
-window.blit(bg,(0,0))
-x,y=0,0
-for r in level1:
-    for c in r:
-        if c == "-":
-            r1 = Settings(x,y,40,40,0,platform)
-            r1.reset()
-        if c =="/":
-            r2 = Settings(x,y-40,40,180,0,stairs)
-            r2.reset()
-        if c == "°":
-            r3 = Settings(x,y,40,40,0,coin_img)
-            r3.reset()
-        if c == "r":
-            r4 = Settings(x,y,40,40,0,nothing)
-            r4.reset()
-        if c == "l":
-            r5 = Settings(x,y,40,40,0,nothing)
-            r5.reset()
-        x+= 40
-    x = 0
-    y+=40
+
+
+class Player(Settings):
+    def update_rl(self):
+        keys = key.get_pressed()
+        if keys[K_a]:
+            self.rect.x-=self.speed
+        if keys[K_d]:
+            self.rect.x+=self.speed
+
+    def update_ud(self):
+        keys = key.get_pressed()
+        if keys[K_w]:
+            self.rect.y-=self.speed
+        if keys[K_s]:
+            self.rect.y+=self.speed
+
+
+class Enemy(Settings):
+    def __init__(self,x,y,w,h,speed,img,side):
+        super().__init__(x,y,w,h,speed,img)
+        self.side = side
+    def update(self):
+        if self.side == 'right':
+            self.img = transform.scale(image.load(enemy_l), (self.width,self.height))
+            self.rect.x += self.speed
+
+        if self.side == 'left':
+            self.img = transform.scale(image.load(enemy_r), (self.width,self.height))
+            self.rect.x -= self.speed
+
+def start_pos():
+    global hero, items,coins_lst,stairs_lst,platforms,blocks_l,blocks_r,enemies
+    hero = Player(300,650,50,50,5,hero_l)
+
+    en1 = Enemy(400,480,50,50,3,enemy_l,'left')
+    en2 = Enemy(230,320,50,50,3,enemy_l,'left')
+    en3 = Enemy(200,480,50,50,3,enemy_l,'left')
+    en4 = Enemy(400,480,50,50,3,enemy_l,'left')
+    enemies = sprite.Group()
+    enemies.add(en1,en2,en3,en4)
+    
+    items = sprite.Group()
+    platforms = []  
+    stairs_lst = []
+    coins_lst = []
+    blocks_r = []
+    blocks_l = []
+    x,y=0,0
+    for r in level1:
+        for c in r:
+            if c == "-":
+                r1 = Settings(x,y,40,40,0,platform)
+                platforms.append(r1)
+                items.add(r1)
+            if c =="/":
+                r2 = Settings(x,y-40,40,180,0,stairs)
+                stairs_lst.append(r2)
+                items.add(r2)
+            if c == "°":
+                r3 = Settings(x,y,40,40,0,coin_img)
+                coins_lst.append(r3)
+                items.add(r3)
+            if c == "r":
+                r4 = Settings(x,y,40,40,0,nothing)
+                blocks_r.append(r4)
+                items.add(r4)
+            if c == "l":
+                r5 = Settings(x,y,40,40,0,nothing)
+                blocks_l.append(r5)
+                items.add(r5)
+            x+= 40
+        x = 0
+        y+=40
+    items.add(hero)    
+    items.add(en1,en2,en3,en4)    
+
+def collides():
+    global points
+    for stair in stairs_lst:
+        if sprite.collide_rect(hero,stair):
+            hero.update_ud()
+            if hero.rect.y <= (stair.rect.y - 40):
+                hero.rect.y = stair.rect.y - 40
+            if hero.rect.y >= (stair.rect.y + 130):
+                hero.rect.y = stair.rect.y + 130
+    for r in blocks_r:
+        if sprite.collide_rect(hero,r):
+            hero.rect.x = r.rect.x + hero.width
+        for en in sprite.spritecollide(r,enemies,False):
+            en.side = 'right'
+    for l in blocks_l:
+        if sprite.collide_rect(hero,l):
+            hero.rect.x = l.rect.x - hero.width
+        for en in sprite.spritecollide(l,enemies,False):
+            en.side = 'left'
+    
+    for c in coins_lst:
+        if sprite.collide_rect(hero,c):
+            coins_lst.remove(c)
+            items.remove(c)
+            points += 1
+
+    
+points = 0
+
+start_pos()    
 game = True 
 while game:
-    time.delay(30)
+    time.delay(1)
+    window.blit(bg,(0,0))
+    hero.update_rl()
+    enemies.update()
     
+    camera.update(hero)
+    for i in items:
+        window.blit(i.image,camera.apply(i))
+
     for e in event.get():
         if e.type == QUIT:
             game = False
+    window.blit(transform.scale(image.load(coin_img),(30,30)),(10,10))
+    coin_txt = font2.render(":"+ str(points), 1,(255,255,255))
+    window.blit(coin_txt,(40,5))
+    collides()
     display.update()
 
 
